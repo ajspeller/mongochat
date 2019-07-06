@@ -14,6 +14,8 @@ const PORT = process.env.PORT || 3000;
 app.use(helmet());
 app.use(morgan('dev'));
 
+app.use(express.static('public'));
+
 const server = app.listen(PORT, () => {
   debug(
     `Webserver started successfull on port ... ${chalk.inverse.green.bold(
@@ -28,14 +30,14 @@ const io = socket(server);
 MongoClient.connect(
   process.env.MONGO_URI,
   { useNewUrlParser: true },
-  (err, db) => {
+  (err, client) => {
     if (err) throw err;
     debug(`Connected to db successfully!`);
 
     // connecti to socket.io
     io.on('connection', (socket) => {
       debug(`Connect established: ${chalk.bold.green(socket.id)}`);
-      let chat = db.collection('chats');
+      let chat = client.db('mongochat').collection('chats');
 
       // send status
       const sendStatus = (status) => {
@@ -46,7 +48,7 @@ MongoClient.connect(
       chat
         .find()
         .limit(100)
-        .sort({ _id })
+        .sort({ _id: 1 })
         .toArray((err, res) => {
           if (err) throw err;
           socket.emit('output', res);
@@ -73,12 +75,12 @@ MongoClient.connect(
         );
       });
       // handle clear
-      socket.on('clear',(data) => {
+      socket.on('clear', (data) => {
         // remove all chats from the collection
-        chat.remove({}, ()=>{
-          socket.emit('cleared')
+        chat.remove({}, () => {
+          socket.emit('cleared');
         });
-      })
+      });
     });
   }
 );
