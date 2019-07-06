@@ -31,5 +31,54 @@ MongoClient.connect(
   (err, db) => {
     if (err) throw err;
     debug(`Connected to db successfully!`);
+
+    // connecti to socket.io
+    io.on('connection', (socket) => {
+      debug(`Connect established: ${chalk.bold.green(socket.id)}`);
+      let chat = db.collection('chats');
+
+      // send status
+      const sendStatus = (status) => {
+        socket.emit('status', status);
+      };
+
+      // get chats
+      chat
+        .find()
+        .limit(100)
+        .sort({ _id })
+        .toArray((err, res) => {
+          if (err) throw err;
+          socket.emit('output', res);
+        });
+
+      // input events
+      socket.on('input', (data) => {
+        const { name, message } = data;
+        if (!name || !message) {
+          return sendStatus(`Please enter a name and message`);
+        }
+        chat.insert(
+          {
+            name,
+            message
+          },
+          () => {
+            io.emit('output', [data]);
+            sendStatus({
+              message: 'Message sent',
+              clear: true
+            });
+          }
+        );
+      });
+      // handle clear
+      socket.on('clear',(data) => {
+        // remove all chats from the collection
+        chat.remove({}, ()=>{
+          socket.emit('cleared')
+        });
+      })
+    });
   }
 );
